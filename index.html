@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game Premium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snake Touch Resize</title>
     <style>
         body {
             margin: 0;
@@ -26,12 +26,14 @@
             padding: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             border: 2px solid #2d4263;
+            transition: transform 0.3s;
         }
 
         #gameCanvas {
             border-radius: 15px;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
             display: block;
+            touch-action: none;
         }
 
         #score {
@@ -71,13 +73,7 @@
             transition: all 0.2s ease;
             box-shadow: 3px 3px 6px rgba(0,0,0,0.3),
                         inset 2px 2px 4px rgba(255,255,255,0.1);
-        }
-
-        .control-btn:active {
-            transform: scale(0.95);
-            box-shadow: 1px 1px 3px rgba(0,0,0,0.3),
-                        inset 2px 2px 4px rgba(0,0,0,0.2);
-            background: linear-gradient(145deg, #26334d, #2d4263);
+            touch-action: none;
         }
 
         #startBtn {
@@ -95,21 +91,6 @@
             box-shadow: 0 5px 15px rgba(233,69,96,0.3);
         }
 
-        #startBtn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(233,69,96,0.4);
-        }
-
-        #startBtn:active {
-            transform: translateY(0);
-        }
-
-        @keyframes food-pulse {
-            0% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.8; }
-        }
-
         @media (max-width: 600px) {
             #controls {
                 display: grid;
@@ -125,7 +106,6 @@
             }
             #score {
                 font-size: 24px;
-                padding: 8px 20px;
             }
         }
     </style>
@@ -148,14 +128,7 @@
         const ctx = canvas.getContext('2d');
         const scoreElement = document.getElementById('score');
         const startBtn = document.getElementById('startBtn');
-
-        // Dimensioni adattive
-        const setCanvasSize = () => {
-            const size = Math.min(window.innerWidth - 40, 400);
-            canvas.width = size;
-            canvas.height = size;
-            gridSize = Math.floor(size / 20);
-        };
+        const gameContainer = document.getElementById('game-container');
 
         let gridSize;
         let snake = [];
@@ -165,9 +138,21 @@
         let score = 0;
         let gameLoop;
         let isGameRunning = false;
+        let touchStartDistance = 0;
+        let initialCanvasSize = 0;
 
+        // Dimensioni dinamiche
+        const setCanvasSize = (size) => {
+            size = Math.max(200, Math.min(500, size));
+            canvas.width = size;
+            canvas.height = size;
+            gridSize = Math.floor(size / 20);
+            gameContainer.style.transform = `scale(${Math.min(1, size/400)})`;
+        };
+
+        // Inizializzazione gioco
         function initGame() {
-            setCanvasSize();
+            setCanvasSize(Math.min(window.innerWidth - 40, 400));
             snake = [{x: 5, y: 5}];
             score = 0;
             direction = 'right';
@@ -176,6 +161,7 @@
             spawnFood();
         }
 
+        // Generazione cibo
         function spawnFood() {
             food = {
                 x: Math.floor(Math.random() * (canvas.width / gridSize)),
@@ -186,8 +172,8 @@
             }
         }
 
+        // Disegno elementi
         function draw() {
-            // Sfondo
             ctx.fillStyle = '#0f3460';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -200,13 +186,8 @@
                     (segment.y + 1) * gridSize
                 );
                 
-                if(index === 0) {
-                    gradient.addColorStop(0, '#e94560');
-                    gradient.addColorStop(1, '#ff6b6b');
-                } else {
-                    gradient.addColorStop(0, '#2d4263');
-                    gradient.addColorStop(1, '#3d5a80');
-                }
+                gradient.addColorStop(0, index === 0 ? '#e94560' : '#2d4263');
+                gradient.addColorStop(1, index === 0 ? '#ff6b6b' : '#3d5a80');
                 
                 ctx.fillStyle = gradient;
                 ctx.beginPath();
@@ -233,6 +214,7 @@
             ctx.fill();
         }
 
+        // Movimento serpente
         function move() {
             direction = nextDirection;
             const head = {...snake[0]};
@@ -254,7 +236,6 @@
 
             snake.unshift(head);
 
-            // Cibo
             if(head.x === food.x && head.y === food.y) {
                 score += 10;
                 scoreElement.textContent = `Punteggio: ${score}`;
@@ -264,6 +245,7 @@
             }
         }
 
+        // Game Over
         function gameOver() {
             clearInterval(gameLoop);
             isGameRunning = false;
@@ -271,41 +253,69 @@
             startBtn.style.display = 'block';
         }
 
-        function handleKeyPress(e) {
+        // Gestione touch per ridimensionamento
+        let initialPinchDistance = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            if(e.touches.length === 2) {
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialCanvasSize = canvas.width;
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if(e.touches.length === 2 && isGameRunning) {
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                
+                const newSize = Math.max(200, Math.min(500, 
+                    initialCanvasSize * (currentDistance / initialPinchDistance)));
+                
+                setCanvasSize(newSize);
+                draw();
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // Controlli tastiera
+        document.addEventListener('keydown', (e) => {
             if(!isGameRunning) return;
 
             const key = e.key;
-            const oppositeDirections = {
-                up: 'down', down: 'up',
-                left: 'right', right: 'left'
+            const validDirections = {
+                'ArrowUp': 'up',
+                'ArrowDown': 'down',
+                'ArrowLeft': 'left',
+                'ArrowRight': 'right'
             };
 
-            if(key === 'ArrowUp' && direction !== 'down') nextDirection = 'up';
-            if(key === 'ArrowDown' && direction !== 'up') nextDirection = 'down';
-            if(key === 'ArrowLeft' && direction !== 'right') nextDirection = 'left';
-            if(key === 'ArrowRight' && direction !== 'left') nextDirection = 'right';
-        }
+            if(validDirections[key] && direction !== oppositeDirections[validDirections[key]]) {
+                nextDirection = validDirections[key];
+            }
+        });
 
         // Controlli touch
+        const oppositeDirections = {
+            up: 'down', down: 'up',
+            left: 'right', right: 'left'
+        };
+
         document.querySelectorAll('.control-btn').forEach(button => {
             button.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                const directionMap = {
-                    up: 'up', down: 'down',
-                    left: 'left', right: 'right'
-                };
-                const newDir = directionMap[e.target.id];
-                if(newDir && direction !== oppositeDirections[newDir]) {
-                    nextDirection = newDir;
+                const direction = e.target.id;
+                if(direction && direction !== oppositeDirections[nextDirection]) {
+                    nextDirection = direction;
                 }
+                e.preventDefault();
             });
         });
 
-        window.addEventListener('resize', () => {
-            setCanvasSize();
-            draw();
-        });
-
+        // Avvio gioco
         startBtn.addEventListener('click', () => {
             initGame();
             isGameRunning = true;
@@ -316,10 +326,8 @@
             }, 100);
         });
 
-        document.addEventListener('keydown', handleKeyPress);
-
-        // Inizializzazione
-        setCanvasSize();
+        // Adattamento iniziale
+        initGame();
         draw();
     </script>
 </body>
